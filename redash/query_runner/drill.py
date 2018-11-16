@@ -1,36 +1,38 @@
+import os
 import logging
 import requests
-import json
 
 from dateutil import parser
 
 from redash.query_runner import BaseQueryRunner, register
 from redash.query_runner import TYPE_STRING, TYPE_DATETIME, TYPE_INTEGER, TYPE_FLOAT, TYPE_BOOLEAN
-from redash.utils import json_dumps
+from redash.utils import json_dumps, json_loads
 
 logger = logging.getLogger(__name__)
 
-def guess_type(value):
-    if value == '' or value is None:
+
+# Drill returns request result as strings, so we have to guess the actual column type
+def guess_type(string_value):
+    if string_value == '' or string_value is None:
         return TYPE_STRING
 
     try:
-        int(value)
+        int(string_value)
         return TYPE_INTEGER
     except (ValueError, OverflowError):
         pass
 
     try:
-        float(value)
+        float(string_value)
         return TYPE_FLOAT
     except (ValueError, OverflowError):
         pass
 
-    if unicode(value).lower() in ('true', 'false'):
+    if unicode(string_value).lower() in ('true', 'false'):
         return TYPE_BOOLEAN
 
     try:
-        parser.parse(value)
+        parser.parse(string_value)
         return TYPE_DATETIME
     except (ValueError, OverflowError):
         pass
@@ -38,25 +40,27 @@ def guess_type(value):
     return TYPE_STRING
 
 
-def convert_type(value, type):
-    if value is None or value == '':
+# Convert Drill string value to actual type
+def convert_type(string_value, actual_type):
+    if string_value is None or string_value == '':
         return ''
 
-    if type == TYPE_INTEGER:
-        return int(value)
+    if actual_type == TYPE_INTEGER:
+        return int(string_value)
 
-    if type == TYPE_FLOAT:
-        return float(value)
+    if actual_type == TYPE_FLOAT:
+        return float(string_value)
 
-    if type == TYPE_BOOLEAN:
-        return unicode(value).lower() == 'true'
+    if actual_type == TYPE_BOOLEAN:
+        return unicode(string_value).lower() == 'true'
 
-    if type == TYPE_DATETIME:
-        return parser.parse(value)
+    if actual_type == TYPE_DATETIME:
+        return parser.parse(string_value)
 
-    return unicode(value)
+    return unicode(string_value)
 
 
+# Parse Drill API response and translate it to accepted format
 def parse_response(data):
     cols = data['columns']
     rows = data['rows']
@@ -101,10 +105,6 @@ class Drill(BaseQueryRunner):
         schema = {
             'type': 'object',
             'properties': {
-                'url': {
-                    'type': 'string',
-                    'title': 'Drill URL',
-                },
                 'username': {
                     'type': 'string',
                     'title': 'Username',
@@ -113,9 +113,16 @@ class Drill(BaseQueryRunner):
                     'type': 'string',
                     'title': 'Password',
                 },
+                'url': {
+                    'type': 'string',
+                    'title': 'Drill URL',
+                },
+                # Since Drill itself can act as aggregator of various datasources,
+                # it can contain quite a lot of schemas in `INFORMATION_SCHEMA`
+                # We added this to improve user experience and let users focus only on desired schemas.
                 'allowed_schemas': {
                     'type': 'string',
-                    'title': 'List of schemas to use in auto-complete (comma separated)'
+                    'title': 'List of schemas to use in schema browser (comma separated)'
                 }
             },
             'required': ['url'],
@@ -172,7 +179,7 @@ class Drill(BaseQueryRunner):
         return response, error
 
     def run_query(self, query, user):
-        drill_url = '{}/query.json'.format(self.configuration['url'])
+        drill_url = os.path.join(self.configuration['url'], 'query.json')
 
         try:
             payload = {'queryType': 'SQL', 'query': query}
@@ -202,7 +209,6 @@ class Drill(BaseQueryRunner):
             and TABLE_SCHEMA not like '%.INFORMATION_SCHEMA' 
             
         """
-
         allowed_schemas = self.configuration.get('allowed_schemas')
         if allowed_schemas:
             query += "and TABLE_SCHEMA in ({})".format(', '.join(map(lambda x: "'{}'".format(x.strip()), allowed_schemas.split(','))))
@@ -212,7 +218,7 @@ class Drill(BaseQueryRunner):
         if error is not None:
             raise Exception("Failed getting schema.")
 
-        results = json.loads(results)
+        results = json_loads(results)
 
         schema = {}
 
