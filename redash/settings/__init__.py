@@ -185,6 +185,8 @@ default_query_runners = [
     'redash.query_runner.prometheus',
     'redash.query_runner.qubole',
     'redash.query_runner.db2',
+    'redash.query_runner.druid',
+    'redash.query_runner.kylin',
     'redash.query_runner.drill'
 ]
 
@@ -242,6 +244,11 @@ SCHEMA_RUN_TABLE_SIZE_CALCULATIONS = parse_boolean(os.environ.get("REDASH_SCHEMA
 # Allow Parameters in Embeds
 # WARNING: With this option enabled, Redash reads query parameters from the request URL (risk of SQL injection!)
 ALLOW_PARAMETERS_IN_EMBEDS = parse_boolean(os.environ.get("REDASH_ALLOW_PARAMETERS_IN_EMBEDS", "false"))
+
+# kylin
+KYLIN_OFFSET = int(os.environ.get('REDASH_KYLIN_OFFSET', 0))
+KYLIN_LIMIT = int(os.environ.get('REDASH_KYLIN_LIMIT', 50000))
+KYLIN_ACCEPT_PARTIAL = parse_boolean(os.environ.get("REDASH_KYLIN_ACCEPT_PARTIAL", "false"))
 
 # sqlparse
 SQLPARSE_FORMAT_OPTIONS = {
