@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+import re
 
 from dateutil import parser
 
@@ -125,6 +126,7 @@ class Drill(BaseQueryRunner):
                     'title': 'List of schemas to use in schema browser (comma separated)'
                 }
             },
+            'order': ['url', 'username', 'password', 'allowed_schemas'],
             'required': ['url'],
             'secret': ['password']
         }
@@ -211,7 +213,7 @@ class Drill(BaseQueryRunner):
         """
         allowed_schemas = self.configuration.get('allowed_schemas')
         if allowed_schemas:
-            query += "and TABLE_SCHEMA in ({})".format(', '.join(map(lambda x: "'{}'".format(x.strip()), allowed_schemas.split(','))))
+            query += "and TABLE_SCHEMA in ({})".format(', '.join(map(lambda x: "'{}'".format(re.sub('[^a-zA-Z0-9_.`]', '', x)), allowed_schemas.split(','))))
 
         results, error = self.run_query(query, None)
 
